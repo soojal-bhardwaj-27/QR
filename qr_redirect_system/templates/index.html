@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Redirect System - Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo">
+                <div class="logo-icon">⚡</div>
+                <span>QR System</span>
+            </div>
+            <nav class="nav-menu">
+                <a href="#" class="nav-item active">
+                    <span class="nav-icon">🏠</span>
+                    Dashboard
+                </a>
+                <a href="#qr-section" class="nav-item">
+                    <span class="nav-icon">📱</span>
+                    QR Code
+                </a>
+                <a href="#logs-section" class="nav-item">
+                    <span class="nav-icon">📊</span>
+                    Scan Logs
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="status-indicator">
+                    <span class="status-dot"></span>
+                    Server Online
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="header">
+                <div class="header-title">
+                    <h1>Dashboard</h1>
+                    <p>Manage your QR redirect system</p>
+                </div>
+                <div class="header-stats">
+                    <div class="stat-card">
+                        <span class="stat-number">{{ scan_count }}</span>
+                        <span class="stat-label">Total Scans</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Content Grid -->
+            <div class="content-grid">
+                <!-- URL Management Card -->
+                <section class="card url-card">
+                    <div class="card-header">
+                        <h2>🔗 Redirect URL</h2>
+                        <span class="badge active">Active</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="current-url">
+                            <label>Current Destination</label>
+                            <a href="{{ current_url }}" target="_blank" class="url-display">{{ current_url }}</a>
+                        </div>
+                        <form action="/update-url" method="POST" class="url-form">
+                            <div class="input-group">
+                                <input type="url" name="new_url" placeholder="Enter new redirect URL..." required>
+                                <button type="submit" class="btn btn-primary">
+                                    <span>Update</span>
+                                    <span class="btn-icon">→</span>
+                                </button>
+                            </div>
+                        </form>
+                        {% if message %}
+                        <div class="alert alert-success">
+                            ✅ {{ message }}
+                        </div>
+                        {% endif %}
+                    </div>
+                </section>
+
+                <!-- QR Code Card -->
+                <section id="qr-section" class="card qr-card">
+                    <div class="card-header">
+                        <h2>📱 Your QR Code</h2>
+                        <button class="btn btn-secondary" onclick="window.print()">Download</button>
+                    </div>
+                    <div class="card-body qr-body">
+                        <div class="qr-container">
+                            <img src="{{ url_for('static', filename='qr_code.png') }}?t={{ timestamp }}" alt="QR Code" class="qr-image">
+                        </div>
+                        <div class="qr-info">
+                            <p>Scan this QR code to redirect to:</p>
+                            <code>{{ current_url }}</code>
+                            <div class="qr-actions">
+                                <a href="/qr" target="_blank" class="btn btn-outline">Test Redirect →</a>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Scan Logs Card -->
+                <section id="logs-section" class="card logs-card">
+                    <div class="card-header">
+                        <h2>📊 Recent Scan Logs</h2>
+                        <span class="badge">Last {{ logs|length }} scans</span>
+                    </div>
+                    <div class="card-body">
+                        {% if logs %}
+                        <div class="logs-table-container">
+                            <table class="logs-table">
+                                <thead>
+                                    <tr>
+                                        <th>Timestamp</th>
+                                        <th>IP Address</th>
+                                        <th>User Agent</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for log in logs %}
+                                    <tr>
+                                        <td class="timestamp">{{ log.timestamp }}</td>
+                                        <td class="ip-address">{{ log.ip }}</td>
+                                        <td class="user-agent">{{ log.ua }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="empty-state">
+                            <span class="empty-icon">📭</span>
+                            <p>No scans recorded yet</p>
+                            <span class="empty-hint">Scan the QR code to see logs appear here</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Add smooth scrolling
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                document.querySelector(this.getAttribute('href')).scrollIntoView({
+                    behavior: 'smooth'
+                });
+            });
+        });
+
+        // Auto-refresh logs every 30 seconds
+        setTimeout(() => location.reload(), 30000);
+    </script>
+</body>
+</html>
