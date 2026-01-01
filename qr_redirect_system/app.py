@@ -5,29 +5,42 @@ import qrcode
 import os
 import re
 
-app = Flask(__name__)
+# Get the directory where this script is located
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-CONFIG_FILE = "redirect.json"
-LOG_FILE = "scan_log.txt"
-QR_FILE = "static/qr_code.png"
+app = Flask(__name__, 
+            template_folder=os.path.join(BASE_DIR, 'templates'),
+            static_folder=os.path.join(BASE_DIR, 'static'))
+
+CONFIG_FILE = os.path.join(BASE_DIR, "redirect.json")
+LOG_FILE = os.path.join(BASE_DIR, "scan_log.txt")
+QR_FILE = os.path.join(BASE_DIR, "static/qr_code.png")
+
+# In-memory storage for serverless (Vercel doesn't have persistent filesystem)
+MEMORY_URL = "https://google.com"
+MEMORY_LOGS = []
 
 def get_redirect_url():
+    global MEMORY_URL
     try:
         with open(CONFIG_FILE, "r") as f:
             data = json.load(f)
-        return data.get("url", "https://example.com")
+        return data.get("url", MEMORY_URL)
     except:
-        return "https://example.com"
+        return MEMORY_URL
 
 def set_redirect_url(new_url):
-    with open(CONFIG_FILE, "w") as f:
-        json.dump({"url": new_url}, f)
-    generate_qr_code()
+    global MEMORY_URL
+    MEMORY_URL = new_url
+    try:
+        with open(CONFIG_FILE, "w") as f:
+            json.dump({"url": new_url}, f)
+    except:
+        pass
 
 def generate_qr_code():
     """Generate QR code for the /qr endpoint"""
-    # Get the base URL - in production this would be your domain
-    qr_url = "http://localhost:5000/qr"
+    qr_url = request.host_url + "qr" if request else "https://example.com/qr"
     
     qr = qrcode.QRCode(
         version=1,
@@ -39,26 +52,42 @@ def generate_qr_code():
     qr.make(fit=True)
     
     img = qr.make_image(fill_color="black", back_color="white")
-    os.makedirs("static", exist_ok=True)
-    img.save(QR_FILE)
+    try:
+        os.makedirs(os.path.join(BASE_DIR, "static"), exist_ok=True)
+        img.save(QR_FILE)
+    except:
+        pass
 
 def log_scan():
-    with open(LOG_FILE, "a") as f:
-        f.write(
-            f"{datetime.datetime.now()} | "
-            f"IP: {request.remote_addr} | "
-            f"UA: {request.headers.get('User-Agent')}\n"
-        )
+    global MEMORY_LOGS
+    log_entry = {
+        'timestamp': str(datetime.datetime.now()),
+        'ip': request.remote_addr,
+        'ua': request.headers.get('User-Agent', 'Unknown')
+    }
+    MEMORY_LOGS.insert(0, log_entry)
+    MEMORY_LOGS = MEMORY_LOGS[:50]  # Keep last 50
+    
+    try:
+        with open(LOG_FILE, "a") as f:
+            f.write(
+                f"{log_entry['timestamp']} | "
+                f"IP: {log_entry['ip']} | "
+                f"UA: {log_entry['ua']}\n"
+            )
+    except:
+        pass
 
 def get_scan_logs():
     """Parse scan logs and return as list of dicts"""
-    logs = []
+    global MEMORY_LOGS
+    logs = list(MEMORY_LOGS)
+    
     try:
         with open(LOG_FILE, "r") as f:
             lines = f.readlines()
         
-        for line in reversed(lines[-50:]):  # Get last 50 logs, newest first
-            # Parse: 2024-01-01 12:00:00.123456 | IP: 127.0.0.1 | UA: Mozilla...
+        for line in reversed(lines[-50:]):
             match = re.match(r'(.+?) \| IP: (.+?) \| UA: (.+)', line.strip())
             if match:
                 logs.append({
@@ -68,22 +97,26 @@ def get_scan_logs():
                 })
     except FileNotFoundError:
         pass
-    return logs
+    return logs[:50]
 
 def get_scan_count():
     """Get total number of scans"""
+    count = len(MEMORY_LOGS)
     try:
         with open(LOG_FILE, "r") as f:
-            return len(f.readlines())
+            count += len(f.readlines())
     except FileNotFoundError:
-        return 0
+        pass
+    return count
 
 @app.route("/")
 def dashboard():
     """Main dashboard page"""
-    # Ensure QR code exists
-    if not os.path.exists(QR_FILE):
-        generate_qr_code()
+    try:
+        if not os.path.exists(QR_FILE):
+            generate_qr_code()
+    except:
+        pass
     
     return render_template(
         "index.html",
@@ -118,7 +151,9 @@ def api_stats():
         "recent_logs": get_scan_logs()[:10]
     }
 
+# Vercel handler
+app = app
+
 if __name__ == "__main__":
-    # Generate QR code on startup
     generate_qr_code()
     app.run(host="0.0.0.0", port=5000, debug=True)
